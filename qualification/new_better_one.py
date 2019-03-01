@@ -1,9 +1,6 @@
 import argparse
-import numpy as np
-from typing import List, Iterable, Tuple
+from typing import List
 from dataclasses import dataclass
-from functools import partial
-from multiprocessing.dummy import Pool as ThreadPool
 from tqdm import tqdm
 
 
@@ -15,78 +12,66 @@ class Photo:
     tags: set
 
 
-def analyze(photo1: Photo, photo2: Photo) -> Tuple[int, int]:
-    intersections = len(photo1.tags.intersection(photo2.tags))
-
-    if intersections == 0:
-        return 0, 0
-
-    score = min(len(photo1.tags.difference(photo2.tags)),
-                intersections,
-                len(photo2.tags.difference(photo1.tags)))
-
-    #h = int(np.abs(len(photo1.tags) - len(photo2.tags))) // 2
-    #score = max(intersections - h, 0)
-    return intersections, score
-
-
-def process(photo: Photo, photos: List[Photo], pool: ThreadPool):
-    n = len(photos)
-    intersections = np.zeros(n, dtype=np.int8)
-    scores = np.zeros(n, dtype=np.int8)
-
-    """
-    fn = partial(analyze, photo2=photo)
-    results = pool.map(fn, photos)
-    for i, res in enumerate(results):
-        intersections[i], scores[i] = res
-    """
-
-    """
-    for i, photo2 in enumerate(photos):
-        intersections[i], scores[i] = analyze(photo, photo2)
-    """
-
-    for i, photo2 in enumerate(photos):
-        ii = len(photo.tags.intersection(photo2.tags))
-
-        if ii == 0:
-            continue
-
-        intersections[i] = ii
-        scores[i] = min(len(photo.tags.difference(photo2.tags)),
-                        ii,
-                        len(photo2.tags.difference(photo.tags)))
-
-    return intersections, scores
-
-
-def get_random(arr: List) -> Tuple[int, object]:
-    random_index = np.random.randint(len(arr))
-    return random_index, arr[random_index]
+def merge(v1: Photo, v2: Photo) -> Photo:
+    assert v1.is_vertical == v2.is_vertical == True
+    merged_tags = v1.tags.union(v2.tags)
+    return Photo(v1.id + v2.id, False, len(merged_tags), merged_tags)
 
 
 def solve(photos: List[Photo]) -> List[Photo]:
-    photos = sorted(photos, key=lambda x: x.num_tags)
-    #current_photo = photos.pop(np.random.randint(len(photos)))
+    horizontal = []
+    vertical = []
+    for photo in photos:
+        if photo.is_vertical:
+            vertical.append(photo)
+        else:
+            horizontal.append(photo)
+
+    progress_bar = tqdm(total=len(vertical), desc='Vertical merging')
+    for iteration in range(len(vertical)):
+        progress_bar.update()
+        if len(vertical) <= 1:
+            break
+
+        v1 = vertical.pop(0)
+        max_h = -100000
+        max_h_idx = None
+        for i, v2 in enumerate(vertical):
+            # Vertical merge heuristic
+            h = - len(v1.tags.intersection(v2.tags))
+            if h > max_h:
+                max_h_idx = i
+                max_h = h
+
+        if max_h_idx is not None:
+            v2 = vertical.pop(max_h_idx)
+            horizontal.append(merge(v1, v2))
+    progress_bar.close()
+
+    photos = sorted(horizontal, key=lambda x: x.num_tags)
     current_photo = photos.pop(0)
     results = [current_photo]
-    pool = ThreadPool()
 
-    for _ in tqdm(range(len(photos))):
+    for _ in tqdm(range(len(photos)), desc='Arranging slides'):
         if len(photos) == 0:
             break
 
-        intersections, scores = process(current_photo, photos, pool)
+        max_score = -100000
+        max_score_idx = None
+        for i, photo2 in enumerate(photos):
+            score = min(len(current_photo.tags.difference(photo2.tags)),
+                        len(current_photo.tags.intersection(photo2.tags)),
+                        len(photo2.tags.difference(current_photo.tags)))
+            if score > max_score:
+                max_score_idx = i
+                max_score = score
 
-        if np.max(scores) == 0:
-            #current_photo = photos.pop(np.random.randint(len(photos)))
+        if max_score == 0:
             current_photo = photos.pop(0)
             results.append(current_photo)
             continue
 
-        best_score_idx = np.argmax(scores)
-        photo2 = photos.pop(best_score_idx)
+        photo2 = photos.pop(max_score_idx)
         results.append(photo2)
         current_photo = photo2
 
