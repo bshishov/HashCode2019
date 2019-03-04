@@ -105,7 +105,7 @@ void BuildAdjacencyMatrix(std::vector<Photo> &photos, Stats &s, Eigen::SparseMat
 }
 
 template <typename ResultIt>
-bool BuildRoute(Photo current_photo, std::vector<Photo> &horizontal_photos, ResultIt resultIterator, const bool untillTheEnd = true)
+uint64_t BuildRoute(Photo current_photo, std::vector<Photo> &horizontal_photos, ResultIt resultIterator, const bool untillTheEnd = true)
 {
 	uint64_t length_of_slides = 0;
 	while (true)
@@ -130,12 +130,11 @@ bool BuildRoute(Photo current_photo, std::vector<Photo> &horizontal_photos, Resu
 
 			horizontal_photos.erase(nextPhotoIt);
 
-			if(!untillTheEnd)
+			if (!untillTheEnd)
 				break;
 		}
 		else
 		{
-			std::cout << "Length of path = " << length_of_slides << std::endl;
 			break;
 		}
 	}
@@ -143,13 +142,38 @@ bool BuildRoute(Photo current_photo, std::vector<Photo> &horizontal_photos, Resu
 	return length_of_slides;
 }
 
-Photo PickNextPhoto(std::vector<Photo> &horizontal_photos, std::vector<Photo> &vertical_photos)
+std::vector<Photo>::iterator Closest(std::vector<Photo> &photos, uint8_t tag_count)
 {
-	auto current_it = horizontal_photos.begin();
-	auto current_photo = *current_it;
-	horizontal_photos.erase(current_it);
+	auto lowIt = std::lower_bound(photos.begin(), photos.end(), tag_count, [&](const Photo &p, uint8_t tags) {return p.tags.size() < tags; });
+	auto highIt = std::upper_bound(photos.begin(), photos.end(), tag_count, [&](uint8_t tags, const Photo &p) {return p.tags.size() > tags; });
 
-	return current_photo;
+	if (lowIt != photos.end() && highIt != photos.end())
+	{
+		auto lowDiff = tag_count - lowIt->tags.size();
+		auto hiDiff = highIt->tags.size() - tag_count;
+
+		return lowDiff < hiDiff ? lowIt : highIt;
+	}
+	else if (lowIt != photos.end())
+		return lowIt;
+	else if (highIt != photos.end())
+		return highIt;
+
+	return photos.begin();
+}
+
+Photo PickNextPhoto(Stats &s, std::vector<Photo> &horizontal_photos, std::vector<Photo> &vertical_photos)
+{
+	if (!horizontal_photos.empty())
+	{
+		auto current_it = Closest(horizontal_photos, s.avg_tags_count);
+		auto current_photo = *current_it;
+		horizontal_photos.erase(current_it);
+
+		std::cout << "Path start tag length = " << current_photo.tags.size() << std::endl;
+
+		return current_photo;
+	}
 }
 
 std::list<uint64_t> Solve(Stats &s, std::vector<Photo> &horizontal_photos, std::vector<Photo> &vertical_photos)
@@ -166,17 +190,18 @@ std::list<uint64_t> Solve(Stats &s, std::vector<Photo> &horizontal_photos, std::
 	bool reverse_order = false;
 	while (!horizontal_photos.empty() || !vertical_photos.empty())
 	{
-		auto current_photo = PickNextPhoto(horizontal_photos, vertical_photos);
+		auto current_photo = PickNextPhoto(s, horizontal_photos, vertical_photos);
 
 		std::list<uint64_t> current_results;
 		current_results.push_back(current_photo.idx);
 
-		bool anyFind = false;
+		uint64_t route_length = 1;
 		{
-			anyFind = false;
-			anyFind |= BuildRoute(current_photo, horizontal_photos, std::back_inserter(current_results), true);
-			anyFind |= BuildRoute(current_photo, horizontal_photos, std::front_inserter(current_results), true);
-		} 
+			route_length += BuildRoute(current_photo, horizontal_photos, std::back_inserter(current_results), true);
+			route_length += BuildRoute(current_photo, horizontal_photos, std::front_inserter(current_results), true);
+		}
+
+		std::cout << "Length of path = " << route_length << std::endl;
 
 		final_results.splice(final_results.end(), current_results);
 
@@ -245,7 +270,7 @@ int main(int argc, char **argv)
 				s.max_tags_count = tag_count;
 			s.avg_tags_count += tag_count;
 
-			if(p.orientation == OrientationMode::Vertical)
+			if (p.orientation == OrientationMode::Vertical)
 				vertical_photos.emplace_back(std::move(p));
 			else
 				horizontal_photos.emplace_back(std::move(p));
