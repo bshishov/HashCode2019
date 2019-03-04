@@ -164,10 +164,11 @@
     <ClCompile Include="slideshow.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="b_lovely_landscapes.txt" />
-    <Text Include="c_memorable_moments.txt" />
-    <Text Include="d_pet_pictures.txt" />
-    <Text Include="e_shiny_selfies.txt" />
+    <Text Include="..\input\a_example.txt" />
+    <Text Include="..\input\b_lovely_landscapes.txt" />
+    <Text Include="..\input\c_memorable_moments.txt" />
+    <Text Include="..\input\d_pet_pictures.txt" />
+    <Text Include="..\input\e_shiny_selfies.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

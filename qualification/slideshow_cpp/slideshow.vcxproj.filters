@@ -20,16 +20,19 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="b_lovely_landscapes.txt">
+    <Text Include="..\input\c_memorable_moments.txt">
       <Filter>Resource Files</Filter>
     </Text>
-    <Text Include="d_pet_pictures.txt">
+    <Text Include="..\input\d_pet_pictures.txt">
       <Filter>Resource Files</Filter>
     </Text>
-    <Text Include="e_shiny_selfies.txt">
+    <Text Include="..\input\e_shiny_selfies.txt">
       <Filter>Resource Files</Filter>
     </Text>
-    <Text Include="c_memorable_moments.txt">
+    <Text Include="..\input\a_example.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="..\input\b_lovely_landscapes.txt">
       <Filter>Resource Files</Filter>
     </Text>
   </ItemGroup>

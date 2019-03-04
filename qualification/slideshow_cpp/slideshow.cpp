@@ -55,75 +55,6 @@ struct Photo
 	std::vector<uint32_t> tags;
 };
 
-class SimilarityMatrix final
-{
-public:
-	SimilarityMatrix(uint64_t size)
-		: size_(size - 1)
-	{
-
-		data_.resize(size_ * (size_ + 1) / 2);
-	}
-
-	int8_t& operator()(uint64_t row, uint64_t col)
-	{
-		if (row == col || row > size_ || col > size_)
-			throw;
-
-		if (row > col)
-			return operator()(col, row);
-
-		const uint64_t pos = getRowStartIndex(row) + (col - 1 - row);
-		return data_[pos];
-	}
-
-	uint64_t getRowStartIndex(uint64_t row) const
-	{
-		return row * ((size_ + (size_ - row + 1)) / 2);
-	}
-
-
-	int64_t getMaxElementCollumn(uint64_t row)
-	{
-		int8_t max = 0;
-		int64_t max_col = -1;
-
-		for (uint64_t i = 0; i < row; ++i)
-		{
-			auto current = this->operator()(i, row);
-			if (current > max)
-			{
-				max = current;
-				max_col = i;
-			}
-		}
-
-		const uint64_t row_start = getRowStartIndex(row);
-		auto beginIt = data_.begin() + row_start + row + 1;
-		auto endIt = data_.begin() + getRowStartIndex(row + 1);
-
-		auto findIt = std::max_element(beginIt, endIt);
-		int64_t foundCollumn = -1;
-		if (max_col > 0)
-		{
-			if (max > *findIt)
-			{
-				foundCollumn = max_col;
-			}
-		}
-		else if (*findIt > 0)
-		{
-			foundCollumn = findIt - beginIt;
-		}
-		return foundCollumn;
-	}
-
-
-private:
-	const uint64_t size_;
-	std::vector<int8_t> data_;
-};
-
 bool photoLess(const Photo& p1, const Photo& p2)
 {
 	return p1.tags.size() < p2.tags.size();
@@ -174,10 +105,8 @@ void BuildAdjacencyMatrix(std::vector<Photo> &photos, Stats &s, Eigen::SparseMat
 }
 
 template <typename ResultIt>
-bool BuildRoute(ResultIt &it, std::list<Photo> &photos, ResultIt &resultIterator, const bool pushFront, const bool untillTheEnd = true)
+bool BuildRoute(Photo current_photo, std::list<Photo> &photos, ResultIt resultIterator, const bool untillTheEnd = true)
 {
-	Photo current_photo = *it;
-
 	uint64_t length_of_slides = 0;
 	while (true)
 	{
@@ -196,10 +125,10 @@ bool BuildRoute(ResultIt &it, std::list<Photo> &photos, ResultIt &resultIterator
 		if (nextPhotoIt != photos.end())
 		{
 			resultIterator = nextPhotoIt->idx;
-			it = nextPhotoIt;
+			current_photo = *nextPhotoIt;
 			++length_of_slides;
 
-			photos.erase(it);
+			photos.erase(nextPhotoIt);
 
 			if(!untillTheEnd)
 				break;
@@ -207,7 +136,7 @@ bool BuildRoute(ResultIt &it, std::list<Photo> &photos, ResultIt &resultIterator
 		else
 		{
 			std::cout << "Length of path = " << length_of_slides << std::endl;
-			break;;
+			break;
 		}
 	}
 
@@ -239,16 +168,12 @@ std::list<uint64_t> Solve(Stats &s, std::vector<Photo> &photos)
 		std::list<uint64_t> current_results;
 		current_results.push_back(current_photo.idx);
 
-		auto endIt = current_results.begin();
-		auto beginIt = current_results.begin();
-
 		bool anyFind = false;
 		do
 		{
 			anyFind = false;
-			anyFind |= BuildRoute(beginIt, tmp_photos, false, false);
-			anyFind |= BuildRoute(endIt, tmp_photos, true, false);
-
+			anyFind |= BuildRoute(current_photo, tmp_photos, std::back_inserter(current_results), true);
+			anyFind |= BuildRoute(current_photo, tmp_photos, std::front_inserter(current_results), true);
 
 		} while (anyFind);
 
@@ -333,6 +258,6 @@ int main(int argc, char **argv)
 
 	std::ofstream output_file(argv[2]);
 	output_file << res.size() << "\n";
-	std::ostream_iterator<int> output_iterator(output_file, "\n");
+	std::ostream_iterator<uint64_t> output_iterator(output_file, "\n");
 	std::copy(res.begin(), res.end(), output_iterator);
 }
