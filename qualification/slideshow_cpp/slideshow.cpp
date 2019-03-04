@@ -105,14 +105,14 @@ void BuildAdjacencyMatrix(std::vector<Photo> &photos, Stats &s, Eigen::SparseMat
 }
 
 template <typename ResultIt>
-bool BuildRoute(Photo current_photo, std::list<Photo> &photos, ResultIt resultIterator, const bool untillTheEnd = true)
+bool BuildRoute(Photo current_photo, std::vector<Photo> &horizontal_photos, ResultIt resultIterator, const bool untillTheEnd = true)
 {
 	uint64_t length_of_slides = 0;
 	while (true)
 	{
 
 		std::vector<uint32_t> tmp;
-		auto nextPhotoIt = std::find_if(photos.begin(), photos.end(), [&](const Photo &p) {
+		auto nextPhotoIt = std::find_if(horizontal_photos.begin(), horizontal_photos.end(), [&](const Photo &p) {
 			tmp.clear();
 			std::set_intersection(current_photo.tags.begin(), current_photo.tags.end(),
 								  p.tags.begin(), p.tags.end(),
@@ -122,13 +122,13 @@ bool BuildRoute(Photo current_photo, std::list<Photo> &photos, ResultIt resultIt
 			return intersected_tags > 0;
 		});
 
-		if (nextPhotoIt != photos.end())
+		if (nextPhotoIt != horizontal_photos.end())
 		{
 			resultIterator = nextPhotoIt->idx;
 			current_photo = *nextPhotoIt;
 			++length_of_slides;
 
-			photos.erase(nextPhotoIt);
+			horizontal_photos.erase(nextPhotoIt);
 
 			if(!untillTheEnd)
 				break;
@@ -143,39 +143,40 @@ bool BuildRoute(Photo current_photo, std::list<Photo> &photos, ResultIt resultIt
 	return length_of_slides;
 }
 
-std::list<uint64_t> Solve(Stats &s, std::vector<Photo> &photos)
+Photo PickNextPhoto(std::vector<Photo> &horizontal_photos, std::vector<Photo> &vertical_photos)
 {
-	Eigen::SparseMatrix<uint8_t> mat(photos.size(), photos.size());
+	auto current_it = horizontal_photos.begin();
+	auto current_photo = *current_it;
+	horizontal_photos.erase(current_it);
 
-	std::sort(photos.begin(), photos.end(), photoLess);
-	const uint64_t photos_count = photos.size();
+	return current_photo;
+}
 
+std::list<uint64_t> Solve(Stats &s, std::vector<Photo> &horizontal_photos, std::vector<Photo> &vertical_photos)
+{
+	std::sort(horizontal_photos.begin(), horizontal_photos.end(), photoLess);
+	const uint64_t photos_count = horizontal_photos.size();
 
 	uint64_t current_index = 0;
 	std::vector<uint32_t> tmp;
-	std::list<Photo> tmp_photos(photos.begin(), photos.end());
 
 	std::list<uint64_t> final_results;
 	uint64_t length_of_slides = 1;
 
 	bool reverse_order = false;
-	while (!tmp_photos.empty())
+	while (!horizontal_photos.empty() || !vertical_photos.empty())
 	{
-		auto current_it = tmp_photos.begin();
-		auto current_photo = *current_it;
-		tmp_photos.erase(current_it);
+		auto current_photo = PickNextPhoto(horizontal_photos, vertical_photos);
 
 		std::list<uint64_t> current_results;
 		current_results.push_back(current_photo.idx);
 
 		bool anyFind = false;
-		do
 		{
 			anyFind = false;
-			anyFind |= BuildRoute(current_photo, tmp_photos, std::back_inserter(current_results), true);
-			anyFind |= BuildRoute(current_photo, tmp_photos, std::front_inserter(current_results), true);
-
-		} while (anyFind);
+			anyFind |= BuildRoute(current_photo, horizontal_photos, std::back_inserter(current_results), true);
+			anyFind |= BuildRoute(current_photo, horizontal_photos, std::front_inserter(current_results), true);
+		} 
 
 		final_results.splice(final_results.end(), current_results);
 
@@ -191,7 +192,8 @@ int main(int argc, char **argv)
 	if (argc != 3)
 		std::cout << "Invalid parameter!\n";
 
-	std::vector<Photo> photos;
+	std::vector<Photo> vertical_photos;
+	std::vector<Photo> horizontal_photos;
 
 	Stats s;
 	{
@@ -203,7 +205,8 @@ int main(int argc, char **argv)
 		inputFileStream.ignore(1, '\n');
 
 		std::string line;
-		photos.reserve(count);
+		vertical_photos.reserve(count);
+		horizontal_photos.reserve(count);
 
 		std::unordered_map<std::string, uint32_t> tag_ids;
 		uint32_t current_tag_id = 0;
@@ -242,16 +245,19 @@ int main(int argc, char **argv)
 				s.max_tags_count = tag_count;
 			s.avg_tags_count += tag_count;
 
-			photos.emplace_back(std::move(p));
+			if(p.orientation == OrientationMode::Vertical)
+				vertical_photos.emplace_back(std::move(p));
+			else
+				horizontal_photos.emplace_back(std::move(p));
 		}
-		s.avg_tags_count /= photos.size();
+		s.avg_tags_count /= vertical_photos.size() + horizontal_photos.size();
 	}
 
 	std::cout << "min_tags: " << s.min_tags_count << "max_tags: " << s.max_tags_count << "avg_tags: " << s.avg_tags_count << std::endl;
 	std::list<uint64_t> res;
 	{
 		ScopedTimer solve("Solve");
-		res = Solve(s, photos);
+		res = Solve(s, horizontal_photos, vertical_photos);
 	}
 
 	ScopedTimer write_res("Write results");
